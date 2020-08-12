@@ -1,0 +1,149 @@
+---
+title: "Covid regression"
+author: ""
+date: "8/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Regression problem
+
+- We will run regression and other related models for Covid-19 data
+
+## Libiraries
+
+- We will use the following packages
+
+```{r}
+library(tidyverse)
+library(caret)
+library(glmnet)
+```
+
+## Load data
+
+The data we will use is the following data. It is a combined dataset from three data sourse we have been using. The code for processing is available at `data_prep/data_preparation.R`.
+
+```{r}
+data_covid <- read_csv("data/covid-data.csv.gz") 
+```
+
+
+## Check data
+
+Let's have a cursory look at the data, especially check the distribution of the output variable `deaths_per1000` Do we need conversion?
+
+### `head()`
+
+```{r}
+head(data_covid)
+```
+
+### Check the distribution of the output
+
+- Do we need to convert?
+
+```{r}
+ggplot(data_covid, aes(x = deaths_per1000)) + geom_density() 
+```
+
+
+## Decide the variable to include as input
+
+- There are 47 variables what are possible predictors? Especially:
+  - trump: pct_report, votes, total_votes, pct, lead, 
+  - demography: TotalPop, Men, Women, Hispanic, White, Black, Native, Asian, Pacific, VotingAgeCitizen, Income, IncomePerCap, Poverty, ChildPoverty, Professional, Service, Office, Construction, Production, Drive, Carpool, Transit, Walk, OtherTransp, WorkAtHome, MeanCommute, Employed, PrivateWork, PublicWork, SelfEmployed, FamilyWork, Unemployment
+- What do you think should be included as the inputs?
+
+
+```{r}
+
+```
+
+## Data preparation
+
+Here we need to prepare the data, in particular:
+
+1. Train-test split
+2. Data preprocessing
+
+Using `caret` (or something else if you like), prepare two datasets of pre-processed train/test data.
+
+## Train-test split
+
+```{r}
+
+```
+
+## Preprocess
+
+```{r}
+
+```
+
+
+## Analysis
+
+### Linear regression
+
+- Run linear regression 
+- Evaluate the model
+
+```{r}
+
+```
+```{r}
+
+```
+
+### Additional movel evaluations
+
+Using the linear regression model as the baseline we attempt two things:
+
+1. Is it possible to improve the prediction using more flexible models?
+  - KNN-regression
+  - Or regression model variant of models covered in classificaiton section. 
+    - For example:
+      - svm: svmPoly, svmRadial works both regression and classification (svmPoly may take quite long time as the number of tuning paramters are many.)
+      - trees: rf
+      
+
+```{r}
+
+```
+
+## LASSO and ridge regression
+
+- Now, let's run LASSO and/or Ridge regression. 
+- What do you find? 
+  - Shrinkage of the coefficients
+
+
+### LASSO Outcome
+
+```{r}
+
+```
+
+
+
+### Ridge regression outcome
+
+```{r}
+
+
+```
+
+
+### Compare coefs: lm, lasso/ridge
+
+Compare the cefficients across the models. What do you find?
+
+```{r}
+
+  
+
+```
