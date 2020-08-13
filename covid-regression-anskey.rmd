@@ -1,0 +1,249 @@
+---
+title: "Covid regression"
+author: ""
+date: "8/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T)
+```
+
+## Regression problem
+
+- We will run regression and other related models for Covid-19 data
+
+## Libiraries
+
+- We will use the following packages
+
+```{r}
+library(tidyverse)
+library(caret)
+library(glmnet)
+```
+
+## Load data
+
+The data we will use is the following data. It is a combined dataset from three data sourse we have been using. The code for processing is available at `data_prep/data_preparation.R`.
+
+```{r}
+data_covid <- read_csv("data/covid-data.csv.gz") 
+```
+
+
+## Check data
+
+Let's have a cursory look at the data, especially check the distribution of the output variable `deaths_per1000` Do we need conversion?
+
+### `head()`
+
+```{r}
+head(data_covid)
+```
+
+### Check the distribution of the output
+
+```{r}
+ggplot(data_covid, aes(x = deaths_per1000)) + geom_density()
+```
+
+```{r}
+ggplot(data_covid, aes(x = deaths_per1000 +.01)) + geom_density() + scale_x_log10()
+```
+
+
+## Decide the variable to include as input
+
+- There are 47 variables what are possible predictors? Especially:
+  - trump: pct_report, votes, total_votes, pct, lead, 
+  - demography: TotalPop, Men, Women, Hispanic, White, Black, Native, Asian, Pacific, VotingAgeCitizen, Income, IncomePerCap, Poverty, ChildPoverty, Professional, Service, Office, Construction, Production, Drive, Carpool, Transit, Walk, OtherTransp, WorkAtHome, MeanCommute, Employed, PrivateWork, PublicWork, SelfEmployed, FamilyWork, Unemployment
+- What do you think should be included as the inputs?
+
+
+```{r}
+data_covid_use <- data_covid %>%
+  mutate(deaths_per1000_log = log(deaths_per1000 + 0.01)) %>%
+  select(deaths_per1000_log, Black, Hispanic, IncomePerCap,
+         Poverty, Unemployment, pct) 
+  
+```
+
+## Data preparation
+
+Here we need to prepare the data, in particular:
+
+1. Train-test split
+2. Data preprocessing
+
+Using `caret` (or something else if you like), prepare two datasets of pre-processed train/test data.
+
+## Train-test split
+
+```{r}
+set.seed(42)
+train_id <- createDataPartition(data_covid_use$deaths_per1000_log, list = F, p = .7)
+data_train <- data_covid_use %>% slice(train_id)
+data_test <- data_covid_use %>% slice(-train_id)
+
+```
+
+## Preprocess
+
+```{r}
+prep <- data_train %>% select(-deaths_per1000_log) %>%
+  preProcess(method = c("center", "scale"))
+
+data_train_preped <- predict(prep, data_train)
+data_test_preped <- predict(prep, data_test)
+
+```
+
+
+## Analysis
+
+### Linear regression
+
+- Run linear regression 
+- Evaluate the model
+
+```{r}
+model_lm <- lm(deaths_per1000_log ~ ., data = data_train_preped)
+data_train_preped %>%
+  mutate(pred_lm = predict(model_lm)) %>%
+  ggplot(aes(x = pred_lm, y = deaths_per1000_log)) + geom_point()
+
+summary(model_lm)
+
+```
+```{r}
+rmse_lm_trian <- (predict(model_lm) - data_train_preped$deaths_per1000_log)^2 %>% mean()
+rmse_lm_test <- (predict(model_lm, newdata = data_test_preped) - 
+                   data_test_preped$deaths_per1000_log)^2 %>% mean()
+
+```
+
+### Additional movel evaluations
+
+Using the linear regression model as the baseline we attempt two things:
+
+1. Is it possible to improve the prediction using more flexible models?
+  - KNN-regression
+  - Or regression model variant of models covered in classificaiton section. 
+    - For example:
+      - svm: svmPoly, svmRadial works both regression and classification (svmPoly may take quite long time as the number of tuning paramters are many.)
+      - trees: rf
+      
+
+
+```{r}
+ctrl <- trainControl(method = "repeatedcv",
+                     number = 5,
+                     repeats = 3)
+model_knn <- train(deaths_per1000_log ~ ., data = data_train_preped, 
+   method = "knn", trControl = ctrl)
+
+model_knn
+pred_train_knn <- predict(model_knn)
+pred_test_knn <- predict(model_knn, newdata = data_test_preped)
+rmse_train_knn <- (pred_train_knn - data_train_preped$deaths_per1000_log)^2 %>% mean()
+rmse_test_knn <- (pred_test_knn - 
+                   data_test_preped$deaths_per1000_log)^2 %>% mean()
+
+rmse_train_knn
+rmse_test_knn
+
+```
+
+### SVM with Radial Kernel
+
+```{r}
+ctrl <- trainControl(method = "repeatedcv",
+                     number = 5,
+                     repeats = 1)
+model_svmradial <- train(deaths_per1000_log ~ ., data = data_train_preped, 
+   method = "svmRadial", trControl = ctrl)
+
+model_svmradial
+pred_train_svmradial <- predict(model_svmradial)
+pred_test_svmradial <- predict(model_svmradial, newdata = data_test_preped)
+rmse_train_svmradial <- (pred_train_svmradial - data_train_preped$deaths_per1000_log)^2 %>% mean()
+rmse_test_svmradial <- (pred_test_svmradial - 
+                   data_test_preped$deaths_per1000_log)^2 %>% mean()
+
+rmse_train_svmradial
+rmse_test_svmradial
+
+```
+
+
+## LASSO and ridge regression
+
+- Now, let's run LASSO and/or Ridge regression. 
+- What do you find? 
+  - Shrinkage of the coefficients
+
+### LASSO Outcome
+
+```{r}
+data_train_x <- data_train_preped %>% select(!deaths_per1000_log) %>% as.matrix()
+data_test_x <- data_test_preped %>% select(!deaths_per1000_log) %>% as.matrix()
+
+model_lasso <- cv.glmnet(data_train_x, data_train_preped$deaths_per1000_log,  
+                             alpha = 1,
+                                 type.measure = "mse", 
+                                 family = "gaussian")
+
+plot(model_lasso)
+model_lasso
+pred_train_lasso <- predict(model_lasso, data_train_x)
+pred_test_lasso <- predict(model_lasso, newx = data_test_x)
+rmse_trian_lasso <- (pred_train_lasso - data_train_preped$deaths_per1000_log)^2 %>% mean()
+rmse_test_lasso <- (pred_test_lasso - 
+                   data_test_preped$deaths_per1000_log)^2 %>% mean()
+plot(model_lasso$glmnet.fit, xvar = "lambda")
+coef(model_lasso)
+```
+
+
+
+### Ridge regression outcome
+
+```{r}
+model_ridge <- cv.glmnet(data_train_x, data_train_preped$deaths_per1000_log, data = data_train_preped, 
+                             alpha = 0,
+                                 type.measure = "mse", 
+                                 family = "gaussian")
+
+plot(model_ridge)
+model_ridge
+pred_train_ridge <- predict(model_ridge, data_train_x)
+pred_test_ridge <- predict(model_ridge, newx = data_test_x)
+rmse_trian_ridge <- (pred_train_ridge - data_train_preped$deaths_per1000_log)^2 %>% mean()
+rmse_test_ridge <- (pred_test_ridge - 
+                   data_test_preped$deaths_per1000_log)^2 %>% mean()
+plot(model_ridge$glmnet.fit, xvar = "lambda")
+coef(model_ridge)
+
+```
+
+
+### Compare coefs: lm, lasso/ridge
+
+Compare the cefficients across the models. What do you find?
+
+```{r}
+list(model_lm, model_lasso, model_ridge) %>%
+  map(~coef(.) %>% as.matrix %>% as.data.frame) %>% bind_cols() %>%
+  rename(lm = 1, ridge = 3, lasso = 2)
+
+list(model_lm, model_lasso, model_ridge) %>%
+  map(~coef(.) %>% as.matrix %>% as.data.frame) %>% bind_cols() %>%
+  rename(lm = 1, ridge = 2, lasso = 3) %>%
+  rownames_to_column(var = "variable") %>% pivot_longer(2:4) %>%
+  filter(variable != "(Intercept)") %>%
+  ggplot(aes(x = value, y = variable, color = name)) + geom_point() +
+  theme_minimal()
+  
+
+```

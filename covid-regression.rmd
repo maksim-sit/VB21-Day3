@@ -1,6 +1,6 @@
 ---
 title: "Covid regression"
-author: ""
+author: "Maksim Sitnikov"
 date: "8/12/2020"
 output: html_document
 ---
